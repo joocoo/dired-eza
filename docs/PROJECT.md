@@ -26,5 +26,10 @@ configuration is:
   :hook (dired-mode . dired-eza-mode))
 ```
 
+Use `make check` for local source/compiled validation, or the direct Emacs
+commands in README.md. Keep module-specific tests in `test/` with shared fixtures
+and preserve the `dired-eza-test` entry point. Update CHANGELOG.md for notable
+changes without inventing release history.
+
 Follow ROADMAP.md for metadata work. Do not claim package-archive availability
 until publication actually happens. Initial license: GPL-3.0-or-later.

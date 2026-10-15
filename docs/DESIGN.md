@@ -102,3 +102,13 @@ must match the expected column count after link count and before size; skip
 author/context columns and ambiguous names with spaces. Dates reuse the size
 module's timestamp grammar and are rendered uniformly, without age queries.
 Both owner and timestamp colors can be disabled independently.
+
+## Test organization and local commands
+
+The six module-specific files in `test/` share `dired-eza-test-helper.el`.
+`dired-eza-test.el` remains the complete suite entry point, preserving direct
+Emacs invocation. Individual module files can also be loaded independently.
+The Makefile offers optional local commands; `make check` serializes source
+ERT, strict runtime compilation, compiled ERT, and cleanup. No workflows or
+Git hooks are installed. CHANGELOG.md records development changes separately
+from the feature roadmap and does not imply an archive or tagged release.

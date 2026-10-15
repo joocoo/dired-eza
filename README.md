@@ -2,6 +2,8 @@
 
 eza-like colors for Emacs Dired
 
+> **Issues and pull requests are not monitored and will be ignored.**
+
 Version **0.4.0** is an independent Emacs Lisp minor-mode package. It is
 not eza and is not affiliated with the eza project. It adds filename colors
 to native Dired using `LS_COLORS`, and metadata colors using `EZA_COLORS`,
@@ -222,6 +224,23 @@ environment, with no remote environment query or added target checks.
 
 ## Development and tests
 
+With Make installed, run these commands from the repository root:
+
+```sh
+make test     # run ERT against the current source/compiled modules
+make compile  # byte-compile with warnings treated as errors
+make check    # test source, compile, test compiled modules, then clean
+make clean    # remove this package's generated .elc files
+```
+
+Choose an Emacs executable when it is not on PATH:
+
+```sh
+make EMACS=/Applications/Emacs.app/Contents/MacOS/Emacs check
+```
+
+Make is an optional development convenience, not a runtime dependency. The
+following direct Emacs commands also work without Make, including on Windows.
 From the repository root, with Emacs on your executable search path:
 
 ```sh
@@ -238,6 +257,21 @@ emacs --batch -Q -L . --eval '(setq byte-compile-error-on-warn t)' \
   -f batch-byte-compile dired-eza-colors.el dired-eza-classify.el dired-eza-permissions.el dired-eza-size.el dired-eza-metadata.el dired-eza.el
 ```
 
+The suite entry point `test/dired-eza-test.el` loads six focused test files:
+
+- `test/dired-eza-colors-test.el`
+- `test/dired-eza-classify-test.el`
+- `test/dired-eza-permissions-test.el`
+- `test/dired-eza-size-test.el`
+- `test/dired-eza-metadata-test.el`
+- `test/dired-eza-mode-test.el`
+
+Shared fixtures live in `test/dired-eza-test-helper.el`. To run one module:
+
+```sh
+emacs --batch -Q -L . -L test -l dired-eza-size-test -f ert-run-tests-batch-and-exit
+```
+
 Tests exercise parsing, style conversion, precedence, size thresholds and
 units, timestamp formats, numeric IDs, device exclusions, real Dired font-lock,
 enable/disable/refresh, marked files, hide-details, buffer-local isolation,
@@ -251,6 +285,7 @@ Six small modules separate parsing, pure classification, permission styles,
 size styles, owner/date styles, and Dired rendering.
 See [docs/DESIGN.md](docs/DESIGN.md) for the research sources and design choices.
 The project brief for continued work is [docs/PROJECT.md](docs/PROJECT.md).
+Development changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
