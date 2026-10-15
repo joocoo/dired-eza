@@ -1,4 +1,4 @@
-;;; dired-eza-colors-test.el --- Colors tests -*- lexical-binding: t; -*-
+;;; dired-eza-colors-test.el --- Colors tests -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 

@@ -1,4 +1,4 @@
-;;; dired-eza-test-helper.el --- Shared ERT fixtures and helpers -*- lexical-binding: t; -*-
+;;; dired-eza-test-helper.el --- Shared ERT fixtures and helpers -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 

@@ -1,4 +1,4 @@
-;;; dired-eza-permissions-test.el --- Permissions tests -*- lexical-binding: t; -*-
+;;; dired-eza-permissions-test.el --- Permissions tests -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 

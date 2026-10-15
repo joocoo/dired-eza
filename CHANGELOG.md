@@ -4,6 +4,9 @@
 
 ### Added
 
+- GitHub installation examples for built-in `use-package :vc` and straight.el,
+  with update instructions and a local-checkout alternative.
+
 - Native Dired filename colors inherited from `LS_COLORS`, including file types,
   permission-based categories, and ordered literal suffix rules.
 - Safe escape and ANSI SGR parsing, including 256-color and RGB styles,
@@ -20,6 +23,11 @@
   and synthetic remote listings guarded against added filesystem/process calls.
 - Local `make test`, `make compile`, `make check`, and `make clean` commands.
 - Contributor instructions, design notes, and a feature roadmap.
+
+### Fixed
+
+- Mark development tests as source-only so package-vc installation does not
+  try to compile test modules without their development load path.
 
 ### Changed
 

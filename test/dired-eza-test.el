@@ -1,4 +1,4 @@
-;;; dired-eza-test.el --- Load the complete ERT suite -*- lexical-binding: t; -*-
+;;; dired-eza-test.el --- Load the complete ERT suite -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 

@@ -1,4 +1,4 @@
-;;; dired-eza-size-test.el --- Size tests -*- lexical-binding: t; -*-
+;;; dired-eza-size-test.el --- Size tests -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 

@@ -75,6 +75,9 @@ files masking source edits. Do not commit generated `.elc` or `.eln` files.
 On macOS, use `/Applications/Emacs.app/Contents/MacOS/Emacs` if `emacs` is not
 on PATH. Documentation-only edits need review, not a full test rerun.
 
+Keep test files marked `no-byte-compile: t` so recursive package installation
+does not compile development fixtures as runtime libraries.
+
 Add focused ERT coverage for new parsing, precedence, field boundaries, and
 lifecycle behavior. Preserve the tests guarding filesystem/process calls.
 Synthetic TRAMP and Windows fixtures are not substitutes for live platform

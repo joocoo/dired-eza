@@ -21,21 +21,51 @@ checks below before pushing.
 
 ## Install and enable
 
-This initial checkout is **not published to a package archive**. Add its
-directory to `load-path`, or use this local installation configuration:
+The package is hosted at [joocoo/dired-eza](https://github.com/joocoo/dired-eza).
+It is not published to a package archive. Choose one installation method.
+Git is required to install or update from the repository; coloring itself
+requires only Emacs built-ins.
+
+### Built-in VC installation (Emacs 30 and 31)
+
+```emacs-lisp
+(use-package dired-eza
+  :vc (:url "https://github.com/joocoo/dired-eza.git"
+       :branch "main"
+       :rev :newest)
+  :hook (dired-mode . dired-eza-mode))
+```
+
+This uses Emacs's built-in package manager and installs the latest commit
+from `main`. The `:vc` keyword handles installation; no package-archive entry
+or local `:load-path` is needed. `:rev :newest` selects the current commit on
+initial installation; it does not update the package on every startup.
+To fetch updates, use `M-x package-vc-upgrade RET dired-eza RET` and restart
+Emacs to ensure all definitions come from the updated package.
+See the [use-package installation manual](https://www.gnu.org/software/emacs/manual/html_node/use-package/Install-package.html).
+
+### straight.el
+
+If you already use [straight.el](https://github.com/radian-software/straight.el),
+place this declaration after its bootstrap and use-package integration:
+
+```emacs-lisp
+(use-package dired-eza
+  :ensure nil
+  :straight (:type git :host github :repo "joocoo/dired-eza"
+             :branch "main" :files ("dired-eza*.el"))
+  :hook (dired-mode . dired-eza-mode))
+```
+
+This recipe includes all runtime modules. Update with
+`M-x straight-pull-package RET dired-eza RET`, then restart Emacs.
+
+### Local development checkout
 
 ```emacs-lisp
 (use-package dired-eza
   :load-path "/absolute/path/to/dired-eza"
   :ensure nil
-  :hook (dired-mode . dired-eza-mode))
-```
-
-Once available in a configured package archive, the intended configuration is:
-
-```emacs-lisp
-(use-package dired-eza
-  :ensure t
   :hook (dired-mode . dired-eza-mode))
 ```
 

@@ -1,4 +1,4 @@
-;;; dired-eza-classify-test.el --- Classify tests -*- lexical-binding: t; -*-
+;;; dired-eza-classify-test.el --- Classify tests -*- lexical-binding: t; no-byte-compile: t; -*-
 
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
