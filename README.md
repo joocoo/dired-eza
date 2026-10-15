@@ -11,7 +11,7 @@ with Emacs theme faces as fallbacks.
 It has no runtime dependencies outside Emacs built-ins.
 
 Targets: **Emacs 30.1+ and 31**, on Linux, macOS, and Windows. Local validation
-uses Emacs 31.1 on macOS. Emacs 30, native Windows/Linux, and live TRAMP sessions
+uses Emacs 31.1 on macOS and Linux. Emacs 30, native Windows, and live TRAMP sessions
 remain manual compatibility checks. Evil is exercised in the user's running
 Emacs session; it is not a package dependency. Tests include synthetic remote
 listings and Windows-style case comparisons.
@@ -137,7 +137,14 @@ The file-type character has its own theme fallback. No per-file metadata is fetc
 
 By default, permission colors inherit `EZA_COLORS` from Emacs, or `EXA_COLORS`
 when EZA_COLORS is unset. Without those variables, theme-based permission
-faces provide colors immediately. To override only this package:
+faces provide colors immediately: read is yellow, write red, and execute green.
+All three permission groups share the same palette. User bits have
+normal weight, group bits are bold, and other bits use the
+permission color as a background fill. Missing and special bits retain their
+separate styles. The `d` directory flag is brighter blue and bold; the `l`
+symlink flag uses a filled background. Explicit rules
+replace this default role emphasis, including explicit resets.
+To override only this package:
 
 ```emacs-lisp
 (setq dired-eza-eza-colors
@@ -154,6 +161,14 @@ Customize `dired-eza-permission-read`, `dired-eza-permission-write`,
 `dired-eza-permission-execute`, `dired-eza-permission-special`,
 `dired-eza-permission-missing`, `dired-eza-permission-type`, and
 `dired-eza-permission-attribute` to adjust the theme fallbacks.
+`dired-eza-permission-directory` and `dired-eza-permission-symlink` control
+the directory and link flags independently of filename colors.
+`dired-eza-permission-group-read`, `dired-eza-permission-group-write`, and
+`dired-eza-permission-group-execute` inherit the shared permission colors by default and allow group-specific customization.
+`dired-eza-permission-group` controls bold emphasis and
+`dired-eza-permission-other` controls fill emphasis. The
+`dired-eza-permission-other-read`, `-write`, and `-execute` faces provide pale
+fills in light mode; dark mode uses reverse video.
 Run `M-x dired-eza-refresh` after changing color strings.
 
 ## Size colors
@@ -161,7 +176,12 @@ Run `M-x dired-eza-refresh` after changing color strings.
 Sizes now use five magnitude categories, with distinct theme fallbacks:
 `dired-eza-size-byte`, `dired-eza-size-kilo`, `dired-eza-size-mega`,
 `dired-eza-size-giga`, and `dired-eza-size-tera`. The last also covers larger
-units. Dired still controls the display format (for example, `-alh`).
+units. Defaults are blue for bytes, green for kilobytes, yellow for megabytes,
+red for gigabytes, and a red background fill for terabytes and larger. Both
+numbers and units use these defaults. Explicit numeric/unit rules replace
+these defaults, including the fill. Color displays use light/dark palettes while
+monochrome displays retain theme-inheriting fallbacks.
+Dired still controls the display format (for example, `-alh`).
 
 EZA_COLORS keys `nb/nk/nm/ng/nt` set numeric styles; `ub/uk/um/ug/ut` set unit
 styles. `sn` sets all numeric styles and `sb` all unit styles, in input order.
@@ -184,6 +204,22 @@ numeric owners, omitted ownership columns, ACL flags, and inode/block prefixes.
 Device IDs, grouped raw counts such as `1,234`, and unknown date formats are
 left with native highlighting. Directories retain their displayed size and
 can be colored just like files. No filesystem lookups are added.
+
+## Light and dark backgrounds
+
+Permission colors, directory flags, and sizes automatically follow each Emacs
+frame's background mode. Light backgrounds use darker gold (`#806000`), red
+(`#b02020`), green (`#006b2d`), and blue (`#1464a0`) for contrast; dark backgrounds
+keep the brighter palette. Normal user bits, bold group bits, and filled other
+bits retain their distinction in both modes. Light-mode other bits use pale
+amber, rose, and green fills with dark text, avoiding heavy solid blocks.
+The link flag uses dark blue text on pale blue in light mode.
+
+Emacs reevaluates the face specifications when themes/background modes change;
+no package refresh or polling is needed. This follows Emacs's background mode,
+not the operating system's appearance independently. Theme-inherited faces continue to follow their theme; the dark-mode link
+flag inherits its type color. Explicit
+`LS_COLORS`/`EZA_COLORS` colors and customized faces retain precedence.
 
 ## Optional ownership and timestamp colors
 

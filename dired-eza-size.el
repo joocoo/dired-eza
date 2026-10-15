@@ -16,15 +16,30 @@
 Human-readable sizes use their displayed unit, without guessing exact bytes."
   :type '(choice (const 1024) (const 1000)) :group 'dired-eza)
 
-(defface dired-eza-size-byte '((t (:inherit shadow)))
+(defface dired-eza-size-byte
+  '((((class color) (background light)) (:inherit shadow :foreground "#1464a0"))
+    (((class color)) (:inherit shadow :foreground "#268bd2"))
+    (t (:inherit shadow)))
   "Fallback for byte-sized values." :group 'dired-eza)
-(defface dired-eza-size-kilo '((t (:inherit font-lock-constant-face)))
+(defface dired-eza-size-kilo
+  '((((class color) (background light)) (:inherit font-lock-constant-face :foreground "#006b2d"))
+    (((class color)) (:inherit font-lock-constant-face :foreground "#008700"))
+    (t (:inherit font-lock-constant-face)))
   "Fallback for kilobyte-sized values." :group 'dired-eza)
-(defface dired-eza-size-mega '((t (:inherit font-lock-string-face)))
+(defface dired-eza-size-mega
+  '((((class color) (background light)) (:inherit font-lock-string-face :foreground "#806000"))
+    (((class color)) (:inherit font-lock-string-face :foreground "#d7af00"))
+    (t (:inherit font-lock-string-face)))
   "Fallback for megabyte-sized values." :group 'dired-eza)
-(defface dired-eza-size-giga '((t (:inherit font-lock-keyword-face)))
+(defface dired-eza-size-giga
+  '((((class color) (background light)) (:inherit font-lock-keyword-face :foreground "#b02020"))
+    (((class color)) (:inherit font-lock-keyword-face :foreground "#d70000"))
+    (t (:inherit font-lock-keyword-face)))
   "Fallback for gigabyte-sized values." :group 'dired-eza)
-(defface dired-eza-size-tera '((t (:inherit warning :weight bold)))
+(defface dired-eza-size-tera
+  '((((class color) (background light)) (:inherit warning :foreground "#b02020" :inverse-video t))
+    (((class color)) (:inherit warning :foreground "#d70000" :inverse-video t))
+    (t (:inherit warning :inverse-video t)))
   "Fallback for terabyte-sized values and larger." :group 'dired-eza)
 
 (defun dired-eza-size-parse (text)
@@ -57,7 +72,7 @@ select their category directly.  Values above terabytes share category 4."
          (fallback (aref [dired-eza-size-byte dired-eza-size-kilo dired-eza-size-mega
                          dired-eza-size-giga dired-eza-size-tera] category))
          (style (cdr (assoc key rules))))
-    (if style (list style fallback) fallback)))
+    (if style (list style '(:inverse-video nil) fallback) fallback)))
 
 (defconst dired-eza-size--timestamp
   (let* ((space "[ \t]+")

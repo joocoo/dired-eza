@@ -59,8 +59,16 @@ priority, and colors only the filename span. A second matcher colors one permiss
 character at a time, including on marked rows. It validates the permission
 field against Dired's filename boundary and respects the requested font-lock
 limit. Symlink targets remain Dired's responsibility. Custom unrecognized listing
-formats degrade to native Dired colors. Theme inheritance avoids copying
-theme-specific color values.
+formats degrade to native Dired colors. Permission and size defaults specify distinct colors on color displays while
+retaining inherited faces for other attributes and monochrome fallbacks.
+All rwx groups share the same background-aware yellow/red/green palette through face
+inheritance. Group bits add bold; other bits use pale per-permission fills on light backgrounds and reverse
+video on dark backgrounds.
+Explicit permission rules bypass role emphasis. Explicit size rules suppress
+fallback reverse video unless the rule itself requests it. The directory flag uses a brighter blue, bold face; the symlink flag uses
+dark blue on pale blue in light mode and reverse video with the inherited
+type color in dark mode. Other type flags, missing bits,
+and special permission styles are unchanged.
 
 The package itself performs zero filesystem/process calls when enabled,
 refreshed, or fontified. Existing Dired commands and target checks may perform
@@ -70,8 +78,8 @@ added behavior; it is not a live remote integration test.
 
 ## Validation boundaries
 
-Local ERT and strict byte compilation run on macOS / Emacs 31.1. GitHub Actions
-workflows were removed at the user's request. Emacs 30, native Windows/Linux,
+Local ERT and strict byte compilation run on macOS and Linux / Emacs 31.1. GitHub Actions
+workflows were removed at the user's request. Emacs 30, native Windows,
 and live TRAMP compatibility still need manual validation. Synthetic TRAMP-path
 fixtures verify that added coloring performs no file-stat or process calls.
 Live reloads verify colors in the user's existing Evil/Dired session.
@@ -112,3 +120,10 @@ The Makefile offers optional local commands; `make check` serializes source
 ERT, strict runtime compilation, compiled ERT, and cleanup. No workflows or
 Git hooks are installed. CHANGELOG.md records development changes separately
 from the feature roadmap and does not imply an archive or tagged release.
+
+Light-background face clauses precede the existing color-display defaults for
+permissions, directory flags, and sizes. Emacs selects these per frame and
+reevaluates them during theme/background changes, so no global hooks, advice,
+timers, or cached color values are needed. ERT exercises dark/light/dark
+selection using simulated frame parameters; live graphical theme switching
+has not been verified for this change.

@@ -4,6 +4,53 @@
 
 (require 'dired-eza-test-helper)
 
+(ert-deftest dired-eza-permissions-light-fills-follow-background ()
+  (let ((background 'light))
+    (cl-letf (((symbol-function 'frame-parameter)
+               (lambda (_frame parameter)
+                 (pcase parameter
+                   ('display-type 'color)
+                   ('background-mode background)))))
+      (dolist (mode '(light dark light))
+        (setq background mode)
+        (let ((light (eq mode 'light)))
+          (should (eq (plist-get (face-spec-choose
+                                 (get 'dired-eza-permission-other 'face-defface-spec))
+                                :inverse-video)
+                      (not light)))
+          (dolist (entry '((dired-eza-permission-other-read . "#fff0b3")
+                           (dired-eza-permission-other-write . "#fbe1e1")
+                           (dired-eza-permission-other-execute . "#dcefdc")
+                           (dired-eza-permission-symlink . "#dcebf7")))
+            (should (equal (plist-get (face-spec-choose
+                                      (get (car entry) 'face-defface-spec))
+                                     :background)
+                           (and light (cdr entry))))))))))
+
+(ert-deftest dired-eza-palette-follows-frame-background ()
+  ;; Exercise Emacs's display selector with simulated color-frame parameters.
+  (let ((background 'dark))
+    (cl-letf (((symbol-function 'frame-parameter)
+               (lambda (_frame parameter)
+                 (pcase parameter
+                   ('display-type 'color)
+                   ('background-mode background)))))
+      (dolist (mode '(dark light dark))
+        (setq background mode)
+        (dolist (entry '((dired-eza-permission-read "#ffd700" "#806000")
+                         (dired-eza-permission-write "#ff5f5f" "#b02020")
+                         (dired-eza-permission-execute "#00af00" "#006b2d")
+                         (dired-eza-permission-directory "#5fafff" "#1464a0")
+                         (dired-eza-size-byte "#268bd2" "#1464a0")
+                         (dired-eza-size-kilo "#008700" "#006b2d")
+                         (dired-eza-size-mega "#d7af00" "#806000")
+                         (dired-eza-size-giga "#d70000" "#b02020")
+                         (dired-eza-size-tera "#d70000" "#b02020")))
+          (should (equal (plist-get (face-spec-choose
+                                    (get (car entry) 'face-defface-spec))
+                                   :foreground)
+                         (nth (if (eq mode 'light) 2 1) entry))))))))
+
 (ert-deftest dired-eza-permissions-parse-separate-namespace ()
   (let ((rules (dired-eza-permissions-parse "ur=31:ur=32:ur=bad:tw=33:su=34:di=35:*.el=36")))
     (should (= (length rules) 3))
@@ -46,6 +93,64 @@
   (should (eq (dired-eza-permissions-face nil "-rwxr-xr-x" 2) 'dired-eza-permission-write))
   (should (eq (dired-eza-permissions-face nil "-rwxr-xr-x" 3) 'dired-eza-permission-execute))
   (should (eq (dired-eza-permissions-face nil "-rwxr-xr-x" 5) 'dired-eza-permission-missing)))
+
+(ert-deftest dired-eza-permissions-role-emphasis-and-overrides ()
+  (dolist (type '(?- ?d))
+    (let ((permissions (concat (string type) "rwxrwxrwx")))
+      (cl-loop for index from 1 to 9
+               for base in '(dired-eza-permission-read dired-eza-permission-write
+                             dired-eza-permission-execute dired-eza-permission-read
+                             dired-eza-permission-write dired-eza-permission-execute
+                             dired-eza-permission-read dired-eza-permission-write
+                             dired-eza-permission-execute) do
+               (should (equal (dired-eza-permissions-face nil permissions index)
+                              (cond ((<= index 3) base)
+                                    ((<= index 6)
+                                     (list 'dired-eza-permission-group
+                                           (nth (- index 4)
+                                                '(dired-eza-permission-group-read
+                                                  dired-eza-permission-group-write
+                                                  dired-eza-permission-group-execute))))
+                                    (t (list 'dired-eza-permission-other
+                                             (nth (- index 7)
+                                                  '(dired-eza-permission-other-read
+                                                    dired-eza-permission-other-write
+                                                    dired-eza-permission-other-execute))))))))
+      (dolist (index '(4 7))
+        (let ((face (dired-eza-permissions-face
+                     (dired-eza-permissions-parse "gr=0:tr=0") permissions index)))
+          (should (equal (car face) dired-eza-colors--reset))
+          (should-not (memq 'dired-eza-permission-group face))
+          (should-not (memq 'dired-eza-permission-other face))))))
+  (should (eq (dired-eza-permissions-face nil "drwxrwxrwx" 0)
+              'dired-eza-permission-directory))
+  (dired-eza-test--buffer
+    (setq-local dired-eza-eza-colors "")
+    (dired-eza-mode 1) (font-lock-ensure)
+    (should (memq 'dired-eza-permission-group
+                  (dired-eza-test--permission-face "script.txt" 4)))
+    (should (memq 'dired-eza-permission-other
+                  (dired-eza-test--permission-face "script.txt" 7)))))
+
+(ert-deftest dired-eza-permissions-type-flags ()
+  (should (eq (dired-eza-permissions-face nil "lrwxrwxrwx" 0)
+              'dired-eza-permission-symlink))
+  (should (eq (dired-eza-permissions-face nil "prw-r--r--" 0)
+              'dired-eza-permission-type))
+  (should (eq (dired-eza-permissions-face nil "-rw-r--r--" 0)
+              'dired-eza-permission-missing))
+  (dired-eza-test--buffer
+    (dired-eza-mode 1) (font-lock-ensure)
+    (should (memq 'dired-eza-permission-directory
+                  (ensure-list (dired-eza-test--permission-face "directory" 0))))
+    (should (memq 'dired-eza-permission-symlink
+                  (ensure-list (dired-eza-test--permission-face "link.txt" 0))))
+    (should (equal (dired-eza-test--foreground "link.txt") "#008080"))
+    (dired-eza-mode -1) (font-lock-ensure)
+    (dolist (name '("directory" "link.txt"))
+      (let ((faces (ensure-list (dired-eza-test--permission-face name 0))))
+        (should-not (memq 'dired-eza-permission-directory faces))
+        (should-not (memq 'dired-eza-permission-symlink faces))))))
 
 (ert-deftest dired-eza-permissions-native-font-lock-and-disable ()
   (dired-eza-test--buffer

@@ -27,6 +27,17 @@ once per refresh; supplementary groups accept explicit configuration. Remote
 identity stays neutral unless supplied. No remote identity queries are added.
 GitHub Actions workflows have been removed; validation is run locally.
 
+## Default visual distinction (implemented)
+
+Read/write/execute use yellow/red/green, with normal user bits, bold group
+bits, and filled other bits, all sharing the same palette. Size categories progress blue/green/yellow/red
+and red fill. Directory flags are brighter blue and bold; symlink flags
+have a filled background. Light-mode other bits and link flags use soft
+fills with dark text. Explicit EZA_COLORS rules and resets retain precedence.
+
+Light/dark face palettes follow each Emacs frame automatically, preserving role
+emphasis and explicit color overrides.
+
 ## Later — remaining metadata and compatibility
 
 Research baseline: [eza color specification](https://github.com/eza-community/eza/blob/main/man/eza_colors.5.md),

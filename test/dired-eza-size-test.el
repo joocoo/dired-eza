@@ -4,6 +4,16 @@
 
 (require 'dired-eza-test-helper)
 
+(ert-deftest dired-eza-size-explicit-styles-control-fill ()
+  (dolist (unit '(nil t))
+    (let ((plain (dired-eza-size-face (dired-eza-size-parse "nt=32:ut=32") 4 unit))
+          (filled (dired-eza-size-face (dired-eza-size-parse "nt=7;32:ut=7;32") 4 unit))
+          (reset (dired-eza-size-face (dired-eza-size-parse "reset") 4 unit)))
+      (should (equal (car plain) '(:foreground "#008000")))
+      (should (equal (cadr plain) '(:inverse-video nil)))
+      (should (plist-get (car filled) :inverse-video))
+      (should (equal (car reset) dired-eza-colors--reset)))))
+
 (ert-deftest dired-eza-size-raw-boundaries ()
   (dolist (base '(1024 1000))
     (let ((dired-eza-size-base base))

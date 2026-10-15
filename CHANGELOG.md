@@ -31,6 +31,21 @@
 
 ### Changed
 
+- Softened light-mode other-permission fills to pale amber, rose, and green
+  with dark text; link flags use dark blue on pale blue.
+
+- Added a contrasting light-background palette for permission bits, directory
+  flags, and sizes. Native per-frame face selection follows Emacs theme and
+  background-mode changes automatically.
+
+- Permission defaults use yellow/red/green for read/write/execute, normal user
+  bits, bold group bits, and filled other bits, all sharing the same palette. Missing and special bits
+  keep their existing styles; explicit EZA_COLORS rules take precedence.
+- Directory flags use brighter blue and bold; symlink flags use a filled
+  background based on the inherited type color. Filename colors are unchanged.
+- Size defaults use blue/green/yellow/red/red fill for bytes through terabytes
+  and larger, for both numbers and units.
+
 - Organized the test suite into six module-specific files with shared helpers.
   The existing `dired-eza-test` suite entry point remains available.
 
@@ -41,5 +56,7 @@
 ### Validation
 
 - Tested locally on macOS with Emacs 31.1, including an existing Evil/Dired
-  session. Emacs 30, native Linux/Windows, and live TRAMP remain unverified.
+  session. The updated defaults pass all 57 ERT tests against source and compiled modules,
+  plus warning-free compilation, on Linux with Emacs 31.1. Emacs 30, native
+  Windows, and live TRAMP remain unverified.
 - No package-archive publication or tagged release is recorded here.
