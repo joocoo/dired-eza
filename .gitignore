@@ -3,3 +3,5 @@
 *~
 .#*
 .DS_Store
+/dired-eza-autoloads.el
+/dired-eza-pkg.el
