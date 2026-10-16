@@ -2,6 +2,10 @@
 
 eza-like colors for Emacs Dired
 
+![dired-eza feature overview showing filename, permission, and metadata colors plus optional cached directory usage](docs/images/dired-eza-overview.png)
+
+*Illustrative feature overview with anonymized demo data.*
+
 > **Issues and pull requests are not monitored and will be ignored.**
 
 Version **0.4.0** is an independent Emacs Lisp minor-mode package. It is
