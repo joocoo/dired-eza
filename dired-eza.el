@@ -28,6 +28,7 @@
 (require 'dired-eza-permissions)
 (require 'dired-eza-size)
 (require 'dired-eza-metadata)
+(require 'dired-eza-du)
 
 (defcustom dired-eza-ls-colors nil
   "LS_COLORS override, or nil to inherit Emacs's environment.

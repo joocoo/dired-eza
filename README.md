@@ -205,6 +205,55 @@ Device IDs, grouped raw counts such as `1,234`, and unknown date formats are
 left with native highlighting. Directories retain their displayed size and
 can be colored just like files. No filesystem lookups are added.
 
+## Cached directory disk usage (optional)
+
+`dired-eza-mode` keeps its default coloring behavior without scans. Enable the
+separate `dired-eza-du-mode` to show recursive **allocated disk usage** for local
+directories in the size column:
+
+```emacs-lisp
+(use-package dired-eza
+  :vc (:url "https://github.com/joocoo/dired-eza.git"
+       :branch "main" :rev :newest)
+  :hook ((dired-mode . dired-eza-mode)
+         (dired-mode . dired-eza-du-mode)))
+```
+
+Or run `M-x dired-eza-du-mode` in a local Dired buffer. The mode silently stays
+off for TRAMP. It requires a local GNU or BSD/macOS `du` supporting `-sk`;
+`dired-eza-du-program` selects the executable. Native Windows needs a compatible
+`du`; Windows behavior has not been verified. No shell or Lisp scanning fallback
+is used. Ordinary files retain their listing sizes, which can be apparent sizes
+rather than allocated space. Dot entries and symlinks are never scanned.
+
+Cached sizes appear immediately, including stale entries. Missing sizes show
+`…` while a **single asynchronous worker** calculates them; failures show `?`
+or retain the last successful total. Requests for the same path are shared
+across buffers. Scans continue when navigating away so revisiting can use the
+result, even with `dired-kill-when-opening-new-dired-buffer` enabled. Background
+scanning still uses disk I/O, and the first measurement of a large tree takes
+time. Unknown listing layouts are skipped.
+
+The cache survives Emacs restarts in `dired-eza-du-cache-file` (by default
+`cache/dired-eza-du.eld` under `user-emacs-directory`). Set the option to nil
+for memory-only caching. The file contains local directory paths and totals,
+is read as data, and is written atomically after idle time or on Emacs exit.
+Entries older than a week are omitted when saving. Separate Emacs processes
+do not merge simultaneous cache writes; the last writer wins.
+
+`dired-eza-du-cache-ttl` defaults to **600 seconds**. Reopening or reverting a
+listing refreshes expired entries in the background; there is no filesystem
+watcher or periodic rescan. Changes deep inside a folder can leave totals stale
+until expiry or a manual refresh. Run `M-x dired-eza-du-refresh` to force a
+rescan while retaining the previous values. Failed scans are throttled for the
+same interval and are not persisted.
+
+All recognized size fields share a padded column, keeping dates and filenames
+aligned as results arrive. Display overlays preserve listing text, point,
+marks, hide-details, and file operations, and disappear when the mode is
+disabled. WDired temporarily hides them and restores them after returning to
+Dired. Dired sorting still uses its original listing values, not cached totals.
+
 ## Light and dark backgrounds
 
 Permission colors, directory flags, and sizes automatically follow each Emacs
@@ -320,10 +369,10 @@ Compile with warnings treated as errors:
 
 ```sh
 emacs --batch -Q -L . --eval '(setq byte-compile-error-on-warn t)' \
-  -f batch-byte-compile dired-eza-colors.el dired-eza-classify.el dired-eza-permissions.el dired-eza-size.el dired-eza-metadata.el dired-eza.el
+  -f batch-byte-compile dired-eza-colors.el dired-eza-classify.el dired-eza-permissions.el dired-eza-size.el dired-eza-metadata.el dired-eza-du.el dired-eza.el
 ```
 
-The suite entry point `test/dired-eza-test.el` loads six focused test files:
+The suite entry point `test/dired-eza-test.el` loads seven focused test files:
 
 - `test/dired-eza-colors-test.el`
 - `test/dired-eza-classify-test.el`
@@ -331,6 +380,7 @@ The suite entry point `test/dired-eza-test.el` loads six focused test files:
 - `test/dired-eza-size-test.el`
 - `test/dired-eza-metadata-test.el`
 - `test/dired-eza-mode-test.el`
+- `test/dired-eza-du-test.el`
 
 Shared fixtures live in `test/dired-eza-test-helper.el`. To run one module:
 
@@ -347,8 +397,8 @@ checks to isolate added work. It does not contact a remote host.
 
 ## Architecture and research
 
-Six small modules separate parsing, pure classification, permission styles,
-size styles, owner/date styles, and Dired rendering.
+Seven small modules separate parsing, pure classification, permission styles,
+size styles, owner/date styles, optional cached disk usage, and Dired rendering.
 See [docs/DESIGN.md](docs/DESIGN.md) for the research sources and design choices.
 The project brief for continued work is [docs/PROJECT.md](docs/PROJECT.md).
 Development changes are recorded in [CHANGELOG.md](CHANGELOG.md).

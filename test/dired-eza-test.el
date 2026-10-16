@@ -8,6 +8,7 @@
 (require 'dired-eza-size-test)
 (require 'dired-eza-metadata-test)
 (require 'dired-eza-mode-test)
+(require 'dired-eza-du-test)
 
 
 

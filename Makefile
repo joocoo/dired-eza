@@ -1,7 +1,7 @@
 EMACS ?= emacs
 
 RUNTIME_SOURCES = dired-eza-colors.el dired-eza-classify.el \
-	dired-eza-permissions.el dired-eza-size.el dired-eza-metadata.el dired-eza.el
+	dired-eza-permissions.el dired-eza-size.el dired-eza-metadata.el dired-eza-du.el dired-eza.el
 BATCH = "$(EMACS)" --batch -Q -L .
 
 .PHONY: test compile check clean

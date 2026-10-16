@@ -19,6 +19,7 @@ behavior; do not claim package-archive availability without verifying it.
 - `dired-eza-permissions.el`: per-character permission styles.
 - `dired-eza-size.el`: displayed size fields, categories, and unit styles.
 - `dired-eza-metadata.el`: owner/group/date fields and identity snapshots.
+- `dired-eza-du.el`: opt-in persistent disk usage cache and background worker.
 - `dired-eza.el`: configuration, minor-mode lifecycle, and Dired font-lock.
 - `test/dired-eza-*-test.el`: focused module and Dired integration tests.
 - `test/dired-eza-test-helper.el`: shared test fixtures and assertions.
@@ -39,8 +40,10 @@ terminal control sequences into buffers.
   sorting, file operations, marks, deletion flags, Evil bindings, and invisibility.
 - Let Dired identify filenames and decode quoting. Skip unknown or ambiguous
   layouts rather than guessing column positions.
-- Read metadata from existing listings. Do not add subprocesses, per-file stat
-  calls, symlink-target checks, or remote environment/identity queries.
+- Read color metadata from existing listings. Default coloring must not add
+  subprocesses, per-file stat calls, symlink-target checks, or remote queries.
+  The explicitly requested opt-in `dired-eza-du-mode` may run one asynchronous
+  local `du` worker and persist cache data; never scan TRAMP or symlink targets.
 - Cache parsed rules and local identity at enable/refresh time. Avoid account
   lookups during fontification. Supplementary groups require explicit identities.
 - Remote ownership stays neutral unless remote identities are explicitly supplied.
@@ -67,7 +70,7 @@ Compile all runtime modules with warnings treated as errors:
 ```sh
 emacs --batch -Q -L . --eval '(setq byte-compile-error-on-warn t)' \
   -f batch-byte-compile dired-eza-colors.el dired-eza-classify.el \
-  dired-eza-permissions.el dired-eza-size.el dired-eza-metadata.el dired-eza.el
+  dired-eza-permissions.el dired-eza-size.el dired-eza-metadata.el dired-eza-du.el dired-eza.el
 ```
 
 Run ERT against source and compiled files when relevant. Avoid stale `.elc`

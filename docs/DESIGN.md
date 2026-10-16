@@ -42,7 +42,9 @@ behavior, not a guarantee that future upstream revisions will match it.
    conservative timestamp anchoring, and magnitude fallback faces.
 5. `dired-eza-metadata.el`: conservative ownership/date fields, identity snapshots,
    and optional neutral remote rendering.
-6. `dired-eza.el`: user configuration, theme fallback faces, buffer-local
+6. `dired-eza-du.el`: opt-in persistent disk usage cache, a shared asynchronous
+   local `du -sk` worker, and reversible shared-width display overlays.
+7. `dired-eza.el`: user configuration, theme fallback faces, buffer-local
    font-lock matcher and minor-mode lifecycle. Dired owns filename boundary
    parsing, quoting, invisibility, navigation and operations.
 
@@ -51,7 +53,7 @@ behavior, not a guarantee that future upstream revisions will match it.
 Enabling parses the environment snapshot once and installs filename, permission, size and owner/date keywords.
 Repeated enables remove the old keyword first. Refresh reparses without
 relocating point or rereading the directory. Disable removes the keyword and
-flushes font-lock, which restores the native faces. No overlays, global advice,
+flushes font-lock, which restores the native faces. The coloring mode uses no overlays, global advice,
 global keyword mutation, keymaps, or per-file attributes are used.
 
 The matcher skips marked/deletion-flagged rows to preserve native visual
@@ -70,8 +72,10 @@ dark blue on pale blue in light mode and reverse video with the inherited
 type color in dark mode. Other type flags, missing bits,
 and special permission styles are unchanged.
 
-The package itself performs zero filesystem/process calls when enabled,
-refreshed, or fontified. Existing Dired commands and target checks may perform
+The default coloring mode performs zero filesystem/process calls when enabled,
+refreshed, or fontified. The separate opt-in disk usage mode reads/writes a local
+cache and runs one asynchronous local subprocess; fontification never starts
+scans. It does not query TRAMP, resolve symlinks, or stat individual entries. Existing Dired commands and target checks may perform
 I/O as usual. Remote color inheritance is explicitly local; it does not ask a
 remote host for environment variables. The synthetic TRAMP test isolates our
 added behavior; it is not a live remote integration test.
@@ -113,7 +117,7 @@ Both owner and timestamp colors can be disabled independently.
 
 ## Test organization and local commands
 
-The six module-specific files in `test/` share `dired-eza-test-helper.el`.
+The seven module-specific files in `test/` share `dired-eza-test-helper.el`.
 `dired-eza-test.el` remains the complete suite entry point, preserving direct
 Emacs invocation. Individual module files can also be loaded independently.
 The Makefile offers optional local commands; `make check` serializes source
@@ -127,3 +131,30 @@ reevaluates them during theme/background changes, so no global hooks, advice,
 timers, or cached color values are needed. ERT exercises dark/light/dark
 selection using simulated frame parameters; live graphical theme switching
 has not been verified for this change.
+
+## Optional cached disk usage
+
+The explicit request for recursive disk usage extends the original color-only
+scope through `dired-eza-du-mode`, leaving default coloring unchanged. Its
+cache is shared across buffers and saved as validated, versioned Lisp data via
+atomic rename. Loading never evaluates data and bounds the input to 4 MiB.
+Cache keys are decoded absolute Dired paths; aliases are not canonicalized with
+filesystem queries. `du -sk` gives allocated KiB on GNU and BSD/macOS, multiplied
+by 1024 before formatting or selecting size colors. Commands use argv, never a
+shell, including for spaces, newlines, and leading dashes in directory names.
+
+One worker deduplicates pending paths; navigating away does not discard work.
+Fresh entries skip scans; expired entries stay visible during refresh. The TTL
+is checked on listing reads, not by watching descendants. Failed scans preserve
+the last successful value and measurement date, with an in-memory retry cooldown.
+Failure state is not persisted. A single failed refresh does not replace a
+successful measurement with a partial `du` total. Concurrent Emacs processes
+may overwrite each other's persisted cache; there is no shared database lock.
+
+Overlays span each size plus its leading whitespace, giving all recognized rows
+one column width. Numeric and unit styling reuse the size module. Listing text,
+marks, hidden-row properties and native sorting are untouched. Buffer-local
+hooks clear/rebuild overlays on reread and remove them during WDired; a local
+post-command hook restores them after WDired returns, without global advice.
+This feature is tested on macOS / Emacs 31.1; live TRAMP and Windows remain
+unverified, with synthetic tests guarding the remote exclusion.

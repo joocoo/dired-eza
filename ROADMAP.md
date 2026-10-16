@@ -74,3 +74,13 @@ when extending metadata support.
 - Add package metadata and release packaging once maintainer identity and
   hosting are chosen. Validate with package-lint at that point.
 - Publish to an archive so the documented `:ensure t` configuration can work.
+
+## Optional cached recursive disk usage (implemented)
+
+Separate opt-in `dired-eza-du-mode` with a persistent shared cache, configurable
+TTL, stale values during background refresh, manual rescan, and one deduplicated
+local `du -sk` worker. TRAMP, symlinks, and dot entries are excluded. Shared-width
+overlays preserve native listings, size colors, hide-details, and WDired.
+Default coloring remains free of scans. Native sorting uses original sizes;
+filesystem watching, cross-process cache merging, and Windows validation remain
+outside this implementation.

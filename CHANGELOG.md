@@ -4,6 +4,14 @@
 
 ### Added
 
+- Opt-in `dired-eza-du-mode` for cached recursive local disk usage, using a
+  persistent cache and one deduplicated asynchronous worker. Fresh entries
+  avoid scans; stale entries remain visible during refresh. Added TTL and
+  cache-file options, explicit refresh, failure throttling, TRAMP exclusion,
+  aligned size overlays, size colors, and WDired lifecycle handling.
+- Focused cache persistence, freshness, background scan, column alignment,
+  failure, and synthetic remote-exclusion tests.
+
 - GitHub installation examples for built-in `use-package :vc` and straight.el,
   with update instructions and a local-checkout alternative.
 
