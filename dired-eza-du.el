@@ -5,7 +5,8 @@
 
 ;;; Commentary:
 ;; Opt-in disk usage for local Dired buffers.  A single asynchronous worker
-;; shares a persistent cache across buffers.  Listing text is never changed.
+;; shares a persistent cache across buffers.  Native size sorting uses cached
+;; directory totals; row contents and native filename properties are preserved.
 
 ;;; Code:
 (require 'cl-lib)
@@ -40,6 +41,7 @@ There is no Lisp fallback when this program is unavailable."
 (defvar-local dired-eza-du--overlays nil)
 (defvar-local dired-eza-du--width 10)
 (defvar-local dired-eza-du--suspended nil)
+(defvar-local dired-eza-du--size-sorted nil)
 (defvar dired-eza--size-rules)
 (defvar dired-eza-du-mode)
 
@@ -164,13 +166,172 @@ There is no Lisp fallback when this program is unavailable."
                                (stale ", stale") (t ""))))))
 
 (defun dired-eza-du--notify (path)
-  "Update live overlays for PATH without retaining dead buffers."
+  "Update PATH's displays and finish pending size sorts in live buffers."
   (dolist (buffer (buffer-list))
     (with-current-buffer buffer
       (when (and dired-eza-du-mode (eq major-mode 'dired-mode))
-        (dolist (overlay dired-eza-du--overlays)
-          (when (equal (overlay-get overlay 'dired-eza-du-path) path)
-            (dired-eza-du--show overlay path)))))))
+        (let (updated)
+          (dolist (overlay dired-eza-du--overlays)
+            (when (equal (overlay-get overlay 'dired-eza-du-path) path)
+              (setq updated t)
+              (dired-eza-du--show overlay path)))
+          ;; Sort once this listing's outstanding scans finish, rather than
+          ;; moving entries after every result.  Other buffers may still scan.
+          (when (and updated
+                     (not (cl-some (lambda (overlay)
+                                     (gethash (overlay-get overlay 'dired-eza-du-path)
+                                              dired-eza-du--pending))
+                                   dired-eza-du--overlays)))
+            (dired-eza-du--render)))))))
+
+(defun dired-eza-du--sort-options (switches)
+  "Return (REVERSE GROUP SI) when SWITCHES request size sorting, else nil.
+Honor combined short options, long options and the last sorting option.
+GROUP is first, last, or nil; SI selects decimal human-readable sizes."
+  (let ((options (split-string-and-unquote (or switches ""))) size reverse group si)
+    (while options
+      (let ((option (pop options)))
+        (cond
+         ((equal option "--") (setq options nil))
+         ((equal option "--sort") (setq size (equal (pop options) "size")))
+         ((string-prefix-p "--sort=" option) (setq size (equal option "--sort=size")))
+         ((equal option "--reverse") (setq reverse t))
+         ((equal option "--si") (setq si t))
+         ((equal option "--group-directories-first") (setq group 'first))
+         ((string-prefix-p "--group-directories=" option)
+          (setq group (pcase (substring option (length "--group-directories="))
+                        ("first" 'first) ("last" 'last))))
+         ((equal option "--group-directories")
+          (setq group (pcase (pop options) ("first" 'first) ("last" 'last))))
+         ((string-match-p "\\`-[^-]" option)
+          (dolist (flag (string-to-list (substring option 1)))
+            (pcase flag
+              (?S (setq size t))
+              ((or ?t ?X ?v ?U ?f) (setq size nil))
+              (?r (setq reverse t))))))))
+    (and size (list reverse group si))))
+
+(defun dired-eza-du--listing-bytes (field si)
+  "Read a regular file's displayed size FIELD, using decimal units with SI.
+Human-readable listing values are rounded; stable ties retain native order.
+Do not query file attributes."
+  (when field
+    (let* ((number (string-to-number
+                    (replace-regexp-in-string
+                     "," "." (buffer-substring-no-properties (nth 0 field) (nth 1 field)))))
+           (unit (buffer-substring-no-properties (nth 1 field) (nth 2 field)))
+           (power (if (equal unit "") 0
+                    (cl-position (upcase (aref unit 0)) "BKMGTPEZYRQ"))))
+      (when power
+        (* number (expt (if (and si (not (string-match-p "i" unit))) 1000 1024) power))))))
+
+(defun dired-eza-du--sort-less-p (a b reverse group)
+  "Compare row records A and B by cached sizes, respecting REVERSE and GROUP."
+  (let* ((name-a (aref a 3)) (name-b (aref b 3))
+         (rank-a (cond ((equal name-a ".") -2) ((equal name-a "..") -1)
+                       ((eq group 'first) (if (aref a 4) 0 1))
+                       ((eq group 'last) (if (aref a 4) 1 0)) (t 0)))
+         (rank-b (cond ((equal name-b ".") -2) ((equal name-b "..") -1)
+                       ((eq group 'first) (if (aref b 4) 0 1))
+                       ((eq group 'last) (if (aref b 4) 1 0)) (t 0)))
+         (size-a (aref a 5)) (size-b (aref b 5)))
+    (cond ((/= rank-a rank-b) (< rank-a rank-b))
+          ((null size-a) nil)
+          ((null size-b) t)
+          ((= size-a size-b) nil)
+          (reverse (< size-a size-b))
+          (t (> size-a size-b)))))
+
+(defun dired-eza-du--sort-run (rows options)
+  "Reorder a contiguous run of ROWS using size sort OPTIONS.
+Return non-nil if row order changed.  Individual row contents stay intact."
+  (when (cdr rows)
+    (let ((sorted (cl-stable-sort
+                   (copy-sequence rows)
+                   (lambda (a b) (dired-eza-du--sort-less-p a b (car options) (cadr options))))))
+      (unless (equal rows sorted)
+        (let ((start (aref (car rows) 0)) (end (aref (car (last rows)) 1)))
+          (delete-region start end)
+          (goto-char start)
+          (dolist (row sorted) (insert (aref row 6))))
+        t))))
+
+(defun dired-eza-du--sort-section (start end options)
+  "Sort known file rows between START and END according to OPTIONS.
+Leave headers, unknown non-file lines, and row properties intact."
+  (goto-char start)
+  (let (rows changed)
+    (while (< (point) end)
+      (let ((begin (line-beginning-position)) filename permissions field)
+        (if (and (setq filename (dired-move-to-filename))
+                 (save-excursion
+                   (beginning-of-line)
+                   (when (re-search-forward dired-permission-flags-regexp filename t)
+                     (setq permissions (match-beginning 1))))
+                 (save-excursion (dired-move-to-end-of-filename t)))
+            (let* ((name (dired-get-filename 'no-dir t))
+                   (path (dired-get-filename nil t))
+                   (directory (eq (char-after permissions) ?d))
+                   (bytes (if directory (cadr (gethash path dired-eza-du--cache))
+                            (unless (memq (char-after permissions) '(?b ?c))
+                              (setq field (dired-eza-size-field (+ permissions 10) filename))
+                              (dired-eza-du--listing-bytes field (nth 2 options))))))
+              ;; Native filename properties can span literal newlines.
+              (dired-move-to-end-of-filename t)
+              (forward-line 1)
+              (push (vector begin (point) path name directory bytes
+                            (buffer-substring begin (point))) rows))
+          (goto-char begin)
+          (let ((resume (line-beginning-position 2)))
+            (when (dired-eza-du--sort-run (nreverse rows) options) (setq changed t))
+            (setq rows nil)
+            (goto-char resume)))))
+    (when (dired-eza-du--sort-run (nreverse rows) options) (setq changed t))
+    changed))
+
+(defun dired-eza-du--sort ()
+  "Apply native size-sort switches using cached directory totals.
+Sort each inserted subdirectory independently.  Dot entries stay first;
+unknown sizes stay last within their directory/file group.  Skip remote
+and narrowed buffers.  Preserve file marks, point's file and modified state."
+  (when (and dired-eza-du-mode (eq major-mode 'dired-mode)
+             (not (file-remote-p default-directory)) (not (buffer-narrowed-p)))
+    (setq dired-eza-du--size-sorted nil)
+    (let* ((location (save-excursion
+                       (let ((position (point)) (path (dired-get-filename nil t)))
+                         (list path (and path (- position (dired-move-to-filename))) position))))
+           (headers (mapcar (lambda (entry)
+                              (cons (cdr entry) (marker-position (cdr entry))))
+                            dired-subdir-alist))
+           (sections (sort (copy-sequence dired-subdir-alist)
+                           (lambda (a b) (< (cdr a) (cdr b)))))
+           (modified (buffer-modified-p))
+           (inhibit-read-only t) (inhibit-modification-hooks t) (buffer-undo-list t)
+           changed)
+      (unwind-protect
+          (cl-loop for rest on sections
+                   for section = (car rest)
+                   for start = (cdr (assoc (cdr section) headers))
+                   for end = (if (cdr rest)
+                                 (cdr (assoc (cdr (cadr rest)) headers)) (point-max))
+                   for switches = (or (cdr (assoc-string (car section) dired-switches-alist))
+                                      (and (not (equal (car section) default-directory))
+                                           dired-subdir-switches)
+                                      dired-actual-switches)
+                   for options = (dired-eza-du--sort-options switches)
+                   when (and options (not (file-remote-p (car section))))
+                   do (progn
+                        (setq dired-eza-du--size-sorted t)
+                        (when (dired-eza-du--sort-section start end options) (setq changed t))
+                        (dolist (header headers) (set-marker (car header) (cdr header)))))
+        ;; Replacing rows can collapse markers at a section boundary.  Each
+        ;; section has the same length, so all header positions remain fixed.
+        (dolist (header headers) (set-marker (car header) (cdr header)))
+        (goto-char (min (point-max) (nth 2 location)))
+        (when (and (car location) (dired-goto-file (car location)))
+          (goto-char (max (point-min) (min (point-max) (+ (point) (cadr location))))))
+        (restore-buffer-modified-p modified))
+      (when changed (font-lock-flush)))))
 
 (defun dired-eza-du--next ()
   "Run one queued local scan, sharing work across every Dired buffer."
@@ -222,6 +383,7 @@ With FORCE, queue every eligible directory.  Never scan . or .. entries."
   (when (and dired-eza-du-mode (eq major-mode 'dired-mode)
              (not (file-remote-p default-directory)))
     (dired-eza-du--load)
+    (dired-eza-du--sort)
     (setq dired-eza-du--width 10)
     (save-excursion
       (goto-char (point-min))
@@ -289,7 +451,9 @@ One background du worker fills a persistent cache shared by all buffers.
 Cached sizes expire after `dired-eza-du-cache-ttl' seconds; they remain
 visible while refreshed.  Symlinks, dot entries, and TRAMP are not scanned.
 Scanning continues after leaving a buffer so revisits can use its results.
-Underlying listing text and Dired's native sorting remain unchanged."
+When native switches request size sorting, use cached directory totals and
+regular file sizes from the listing.  Reverse and directory grouping apply.
+Row contents are unchanged; incomplete totals sort last until scans finish."
   :lighter " Eza-du" :group 'dired-eza
   (when (and dired-eza-du-mode
              (or (not (derived-mode-p 'dired-mode))
@@ -305,7 +469,12 @@ Underlying listing text and Dired's native sorting remain unchanged."
     (remove-hook (car pair) (cdr pair) t)
     (when dired-eza-du-mode (add-hook (car pair) (cdr pair) nil t)))
   (setq dired-eza-du--suspended nil)
-  (when dired-eza-du-mode (dired-eza-du--render)))
+  (if dired-eza-du-mode
+      (dired-eza-du--render)
+    (when dired-eza-du--size-sorted
+      (setq dired-eza-du--size-sorted nil)
+      (when (and (eq major-mode 'dired-mode) (not (file-remote-p default-directory)))
+        (revert-buffer nil t)))))
 
 (add-hook 'kill-emacs-hook #'dired-eza-du--save)
 

@@ -282,7 +282,29 @@ All recognized size fields share a padded column, keeping dates and filenames
 aligned as results arrive. Display overlays preserve listing text, point,
 marks, hide-details, and file operations, and disappear when the mode is
 disabled. WDired temporarily hides them and restores them after returning to
-Dired. Dired sorting still uses its original listing values, not cached totals.
+Dired.
+
+### Sorting by cached disk usage
+
+While `dired-eza-du-mode` is enabled, requesting size sorting with Dired's
+ordinary `-S` or `--sort=size` switches uses cached directory totals. Existing
+commands that call `dired-sort-other` work without new key bindings. Reverse
+sorting (`-r`/`--reverse`) and GNU directory grouping (first or last) are honored.
+Dot entries remain first; ties preserve their existing listing order.
+
+Available cached totals are sorted immediately, including stale ones. Missing
+or failed directory sizes go last within their directory/file group. Once this
+listing's pending scans finish, it is re-sorted automatically; results for other
+buffers do not delay it. File marks, deletion flags, point's file, filename
+properties, hidden details, and subdirectory headers are preserved. Inserted
+subdirectories sort independently using their own listing switches.
+
+Regular files and symlinks use the sizes already in the listing, with no new
+file-stat calls. Human-readable file sizes have their displayed precision;
+values rounded to the same number retain the native ordering. For exact file
+comparisons use non-human-readable listing sizes. Narrowed buffers retain native
+ordering. Other sort modes retain their original behavior. Disabling DU mode
+reverts a size-sorted local listing to the ordinary native order.
 
 ## Light and dark backgrounds
 

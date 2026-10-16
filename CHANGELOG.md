@@ -4,6 +4,14 @@
 
 ### Added
 
+- DU-aware native size sorting: `-S`/`--sort=size` orders directory rows by
+  cached recursive disk usage, honoring reverse order and directory grouping.
+  Missing totals stay last within their group; listings re-sort after their own
+  scans finish. Preserves marks, point's file and inserted subdirectory headers,
+  uses listing data for ordinary files, and restores native order on disable.
+- Cached sorting, completion, reverse/grouping, file units, marks/point,
+  inserted subdirectory and native sort-command integration tests.
+
 - Matching `dired-eza-dark-ls-colors` override, nil by default, with the same
   replacement, fallback, and automatic switching behavior as the light option.
 

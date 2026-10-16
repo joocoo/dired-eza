@@ -81,9 +81,9 @@ Separate opt-in `dired-eza-du-mode` with a persistent shared cache, configurable
 TTL, stale values during background refresh, manual rescan, and one deduplicated
 local `du -sk` worker. TRAMP, symlinks, and dot entries are excluded. Shared-width
 overlays preserve native listings, size colors, hide-details, and WDired.
-Default coloring remains free of scans. Native sorting uses original sizes;
-filesystem watching, cross-process cache merging, and Windows validation remain
-outside this implementation.
+Default coloring remains free of scans. DU mode now uses cached totals for
+native size-sort requests. Filesystem watching, cross-process cache merging,
+and Windows validation remain outside this implementation.
 
 ## Timestamp age shading (implemented)
 
@@ -105,3 +105,12 @@ also defaults to nil and allows independent dark palettes. Both fall back to
 the ordinary configured or inherited LS_COLORS when unset.
 Automatic switching also works with timestamps disabled; metadata coloring
 remains independent. Personal palettes belong in user configuration.
+
+## Sorting cached disk usage (implemented)
+
+Native size-sort switches in DU mode use cached directory totals, with reverse
+and directory grouping preserved. Unknown totals sort last within their group;
+listings re-sort after their own pending scans finish. Rows preserve filename
+properties, marks, point's file and subdirectory boundaries. Regular file sizes
+come from the listing without added stats. Non-size sorts, narrowed buffers and
+TRAMP retain native order; disabling DU mode restores native size order.

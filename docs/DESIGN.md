@@ -153,8 +153,9 @@ successful measurement with a partial `du` total. Concurrent Emacs processes
 may overwrite each other's persisted cache; there is no shared database lock.
 
 Overlays span each size plus its leading whitespace, giving all recognized rows
-one column width. Numeric and unit styling reuse the size module. Listing text,
-marks, hidden-row properties and native sorting are untouched. Buffer-local
+one column width. Numeric and unit styling reuse the size module. Row contents,
+marks and hidden-row properties stay intact; native size-sort requests now
+reorder rows using cached directory totals. Buffer-local
 hooks clear/rebuild overlays on reread and remove them during WDired; a local
 post-command hook restores them after WDired returns, without global advice.
 This feature is tested on macOS / Emacs 31.1; live TRAMP and Windows remain
@@ -206,3 +207,31 @@ namespaces are independent. The existing theme/context hooks reparse filename
 rules on background changes; they now operate even with timestamps disabled.
 Tests cover nil inheritance, custom base values, empty-string fallback,
 light/dark switching, text preservation and unchanged dark palettes.
+
+## Cached disk usage sorting
+
+DU mode interprets active `-S`/`--sort=size` switches when rendering a listing,
+respecting the last sort switch, reverse order and directory grouping. It sorts
+contiguous native file records within each subdirectory. Headers and unknown
+non-file lines stay in place; filename properties let records include literal
+newlines. Dot entries stay first, unavailable directory totals stay last within
+their group, and ties are stable. Only a directory's cached du bytes are used;
+regular files and symlinks use parsed listing sizes (1024-based units, or 1000
+with `--si`). Human-readable precision can produce ties. No new attributes or
+subprocesses are requested by sorting itself.
+
+Rows retain text properties, marks, and deletion flags when reordered. Header
+marker positions are restored after each section because replacing a region can
+collapse markers at its boundary. Point returns to its previous file and offset;
+the original buffer modified state is restored, then font-lock is flushed when
+order changed. Narrowed and remote buffers are skipped. Other sort modes do not
+reorder rows. Disabling DU mode reverts a local size-sorted listing after removing
+its local hooks, restoring native sorting without starting DU work.
+
+The worker updates size overlays as results arrive, but only re-sorts a listing
+once none of its directory overlays are pending. This avoids moving rows after
+every result and does not wait on unrelated buffers. Initial rendering can sort
+immediately from persistent entries while missing values remain last.
+Validation includes native `dired-sort-other` and disable behavior, cached folder
+sizes opposed to ls sizes, file units, stable marks/point, reverse/grouping,
+completion, other sort modes, and inserted subdirectory markers.

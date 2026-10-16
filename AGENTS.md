@@ -44,6 +44,8 @@ terminal control sequences into buffers.
   subprocesses, per-file stat calls, symlink-target checks, or remote queries.
   The explicitly requested opt-in `dired-eza-du-mode` may run one asynchronous
   local `du` worker and persist cache data; never scan TRAMP or symlink targets.
+  In DU mode, native size-sort requests may reorder rows by cached totals while
+  preserving record contents, marks, point's file and subdirectory boundaries.
 - Cache parsed rules and local identity at enable/refresh time. Avoid account
   lookups during fontification. Supplementary groups require explicit identities.
 - Remote ownership stays neutral unless remote identities are explicitly supplied.
