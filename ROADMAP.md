@@ -84,3 +84,24 @@ overlays preserve native listings, size colors, hide-details, and WDired.
 Default coloring remains free of scans. Native sorting uses original sizes;
 filesystem watching, cross-process cache merging, and Windows validation remain
 outside this implementation.
+
+## Timestamp age shading (implemented)
+
+Theme-derived timestamp shades fade logarithmically from recent foreground
+contrast over 90 days. Dark mode ends at a darker gray; light mode starts
+darkest and fades toward a lighter, readable gray.
+Configurable fade age and opt-out, listing-only date parsing, year inference,
+offset support, neutral fallback, and explicit `da` precedence. Time, palette,
+and repeated date faces are cached per refresh/listing read; no extra I/O or
+periodic timer is added. Shades refresh automatically after theme/background changes. Localized month parsing,
+remote timezone discovery, and live graphical verification remain outside the
+current validation.
+
+## Optional light and dark filename palettes (implemented)
+
+`dired-eza-light-ls-colors` defaults to nil and accepts a complete filename
+palette for light backgrounds. A matching `dired-eza-dark-ls-colors` option
+also defaults to nil and allows independent dark palettes. Both fall back to
+the ordinary configured or inherited LS_COLORS when unset.
+Automatic switching also works with timestamps disabled; metadata coloring
+remains independent. Personal palettes belong in user configuration.

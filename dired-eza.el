@@ -37,6 +37,26 @@ Remote buffers use this local environment too; no remote shell is queried."
   :type '(choice (const :tag "Inherit LS_COLORS" nil) string)
   :group 'dired-eza)
 
+(defcustom dired-eza-light-ls-colors nil
+  "Optional LS_COLORS replacement used only with a light background.
+Nil keeps the ordinary `dired-eza-ls-colors' or inherited LS_COLORS.
+A string replaces the complete filename palette in light mode; an empty
+string uses theme fallbacks.  Dark mode uses its independent override.
+Theme changes switch palettes automatically.  Use `dired-eza-refresh' after
+changing this option.  Metadata EZA_COLORS rules are unaffected."
+  :type '(choice (const :tag "Use ordinary LS_COLORS" nil) string)
+  :group 'dired-eza)
+
+(defcustom dired-eza-dark-ls-colors nil
+  "Optional LS_COLORS replacement used only with a dark background.
+Nil keeps the ordinary `dired-eza-ls-colors' or inherited LS_COLORS.
+A string replaces the complete filename palette in dark mode; an empty
+string uses theme fallbacks.  Light mode uses its independent override.
+Theme changes switch palettes automatically.  Use `dired-eza-refresh' after
+changing this option.  Metadata EZA_COLORS rules are unaffected."
+  :type '(choice (const :tag "Use ordinary LS_COLORS" nil) string)
+  :group 'dired-eza)
+
 (defcustom dired-eza-eza-colors nil
   "EZA_COLORS override for metadata, or nil to inherit the environment.
 If EZA_COLORS is unset, inherit EXA_COLORS instead.  An empty string uses
@@ -65,6 +85,10 @@ continue to come from LS_COLORS."
 (defvar-local dired-eza--metadata-rules nil)
 (defvar-local dired-eza--identity nil)
 (defvar-local dired-eza--metadata-face nil)
+(defvar-local dired-eza--timestamp-now nil)
+(defvar-local dired-eza--timestamp-palette nil)
+(defvar-local dired-eza--timestamp-cache nil)
+(defvar-local dired-eza--timestamp-theme-key nil)
 (defconst dired-eza--keywords
   '((dired-eza--match (0 dired-eza--face prepend))
     (dired-eza--match-permission (0 dired-eza--permission-face prepend))
@@ -194,13 +218,66 @@ and optional ACL indicators, without matching permission-like filenames."
           (if field
               (let ((start (max origin (car field))) (end (min limit (nth 1 field))))
                 (setq dired-eza--metadata-face
-                      (dired-eza-metadata-face dired-eza--metadata-rules dired-eza--identity
-                                               (nth 2 field) (nth 3 field)))
+                      (if (and (eq (nth 2 field) 'date) dired-eza--timestamp-cache)
+                          (or (gethash (nth 3 field) dired-eza--timestamp-cache)
+                              (puthash (nth 3 field)
+                                       (dired-eza-metadata-face
+                                        dired-eza--metadata-rules dired-eza--identity
+                                        'date (nth 3 field) dired-eza--timestamp-now
+                                        dired-eza--timestamp-palette)
+                                       dired-eza--timestamp-cache))
+                        (dired-eza-metadata-face dired-eza--metadata-rules dired-eza--identity
+                                                 (nth 2 field) (nth 3 field))))
                 (goto-char end)
                 (set-match-data (list start end))
                 (throw 'found t))
             (forward-line 1)))))
     nil))
+
+(defun dired-eza--filename-colors (&optional background)
+  "Return the configured filename colors for BACKGROUND or the current frame."
+  (or (pcase (or background (frame-parameter nil 'background-mode))
+        ('light dired-eza-light-ls-colors)
+        ('dark dired-eza-dark-ls-colors))
+      dired-eza-ls-colors (getenv "LS_COLORS")))
+
+(defun dired-eza--timestamp-theme-context ()
+  "Return current foreground/background values used to detect theme changes."
+  (list (face-foreground 'default nil t)
+        (face-foreground 'dired-eza-timestamp nil t)
+        (face-background 'default nil t)
+        (frame-parameter nil 'background-mode)))
+
+(defun dired-eza--timestamp-reset ()
+  "Snapshot timestamp time and theme colors once per refresh or listing read."
+  (setq dired-eza--timestamp-now (current-time)
+        dired-eza--timestamp-palette
+        (and dired-eza-color-timestamps dired-eza-timestamp-age-colors
+             (not (assoc "da" dired-eza--metadata-rules))
+             (dired-eza-timestamp-palette))
+        dired-eza--timestamp-cache (make-hash-table :test #'equal)
+        dired-eza--timestamp-theme-key (dired-eza--timestamp-theme-context)))
+
+(defun dired-eza--timestamp-check-theme ()
+  "Switch filename palettes and timestamp shades when theme colors change.
+This cheap buffer-local command hook performs no listing reads or scans."
+  (when (and (bound-and-true-p dired-eza-mode)
+             (not (equal dired-eza--timestamp-theme-key
+                         (dired-eza--timestamp-theme-context))))
+    (setq dired-eza--colors (dired-eza-colors-parse (dired-eza--filename-colors)))
+    (dired-eza--timestamp-reset)
+    (font-lock-flush)))
+
+(defun dired-eza--timestamp-theme-changed (&rest _)
+  "Refresh enabled buffers after a theme is enabled or disabled."
+  (dolist (buffer (buffer-list))
+    (with-current-buffer buffer
+      (dired-eza--timestamp-check-theme))))
+
+;; Theme hooks update visible buffers even when a different buffer is current.
+;; The local command hook also catches direct face/background adjustments.
+(add-hook 'enable-theme-functions #'dired-eza--timestamp-theme-changed)
+(add-hook 'disable-theme-functions #'dired-eza--timestamp-theme-changed)
 
 ;;;###autoload
 (defun dired-eza-refresh ()
@@ -209,7 +286,7 @@ and optional ACL indicators, without matching permission-like filenames."
   (unless (and (derived-mode-p 'dired-mode) (bound-and-true-p dired-eza-mode))
     (user-error "Enable dired-eza-mode in a Dired buffer first"))
   (setq dired-eza--colors
-        (dired-eza-colors-parse (or dired-eza-ls-colors (getenv "LS_COLORS"))))
+        (dired-eza-colors-parse (dired-eza--filename-colors)))
   (let ((eza (or dired-eza-eza-colors (getenv "EZA_COLORS") (getenv "EXA_COLORS"))))
     (setq dired-eza--permission-rules (dired-eza-permissions-parse eza)
           dired-eza--size-rules (dired-eza-size-parse eza)
@@ -217,6 +294,7 @@ and optional ACL indicators, without matching permission-like filenames."
   (setq dired-eza--identity
         (and dired-eza-color-ownership
              (dired-eza-metadata-identity (file-remote-p default-directory))))
+  (dired-eza--timestamp-reset)
   (font-lock-flush))
 
 ;;;###autoload
@@ -224,8 +302,9 @@ and optional ACL indicators, without matching permission-like filenames."
   "Color native Dired filenames, permissions, sizes, ownership and dates.
 Inherit LS_COLORS for names and EZA_COLORS for metadata, with theme
 fallbacks.
-Only font-lock rules are added.  No listing commands, file handlers,
-invisibility properties, key bindings, or global Dired settings change."
+Adds font-lock rules and timestamp refresh hooks.  No listing commands,
+file handlers, invisibility properties, key bindings, or global Dired
+settings change."
   :lighter " Eza" :group 'dired-eza
   (cond
    ((not (derived-mode-p 'dired-mode))
@@ -235,14 +314,20 @@ invisibility properties, key bindings, or global Dired settings change."
     ;; Remove first so repeated positive enables are idempotent.
     (font-lock-remove-keywords nil dired-eza--keywords)
     (font-lock-add-keywords nil dired-eza--keywords 'append)
+    (add-hook 'dired-after-readin-hook #'dired-eza--timestamp-reset nil t)
+    (add-hook 'post-command-hook #'dired-eza--timestamp-check-theme nil t)
     (dired-eza-refresh))
    (t
     (font-lock-remove-keywords nil dired-eza--keywords)
+    (remove-hook 'dired-after-readin-hook #'dired-eza--timestamp-reset t)
+    (remove-hook 'post-command-hook #'dired-eza--timestamp-check-theme t)
     (setq dired-eza--colors nil dired-eza--face nil
           dired-eza--permission-rules nil dired-eza--permission-face nil
           dired-eza--size-rules nil dired-eza--size-face nil
           dired-eza--metadata-rules nil dired-eza--metadata-face nil
-          dired-eza--identity nil)
+          dired-eza--identity nil dired-eza--timestamp-now nil
+          dired-eza--timestamp-palette nil dired-eza--timestamp-cache nil
+          dired-eza--timestamp-theme-key nil)
     (font-lock-flush))))
 
 (provide 'dired-eza)

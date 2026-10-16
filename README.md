@@ -132,6 +132,32 @@ Fallback faces: `dired-eza-file`, `dired-eza-directory`, `dired-eza-symlink`,
 `dired-eza-executable`, and `dired-eza-special`. Customize them via
 `M-x customize-group RET dired-eza`.
 
+## Optional filename palettes for light and dark themes
+
+`dired-eza-light-ls-colors` and `dired-eza-dark-ls-colors` both default to
+**nil**, retaining the ordinary `dired-eza-ls-colors` value or inherited
+`LS_COLORS` for their respective backgrounds. Configure
+it with an LS_COLORS string to replace filename colors on light backgrounds:
+
+```emacs-lisp
+(setq dired-eza-light-ls-colors
+      "fi=0:di=1;38;2;0;85;150:ln=38;2;0;105;115:*.md=38;2;125;90;0")
+```
+
+This is a package option, not an extension to the LS_COLORS format. A configured
+string is a complete replacement, not an overlay: unmatched types/extensions
+use the usual native/theme fallbacks. An empty string selects theme fallbacks
+for all filenames in light mode. `dired-eza-dark-ls-colors` provides the same
+behavior independently for dark mode; leave it nil to keep the ordinary palette.
+For either background, precedence is its specific override, then
+`dired-eza-ls-colors`, then inherited `LS_COLORS`.
+
+Theme or background changes switch palettes automatically, including when
+timestamp coloring is disabled. Run `M-x dired-eza-refresh` after editing the
+option. It affects filename styles only; permissions, sizes, owners, and dates
+keep their independent EZA_COLORS rules and light/dark fallbacks. Remote buffers
+use the same local configuration without querying the remote environment.
+
 ## Permission colors
 
 Permission characters are colored individually: read, write, execute, missing
@@ -276,8 +302,11 @@ flag inherits its type color. Explicit
 
 ## Optional ownership and timestamp colors
 
-Owner/group columns now distinguish your identity, root, and other identities.
-Timestamps use a muted `shadow`-based face so filenames remain prominent.
+Owner/group columns distinguish your identity, root, and other identities.
+Timestamps now fade with age: recent entries approach the theme foreground,
+while older entries fade toward muted gray. Dark backgrounds use a darker old
+shade; light backgrounds keep the newest dates darkest and fade older ones
+into a lighter gray.
 Both are enabled by default and can be switched off independently:
 
 ```emacs-lisp
@@ -309,8 +338,39 @@ root identities are not inferred. Timestamp and size colors still work.
 Owner/group extraction honors omitted columns (`-g`, `-o`, GNU `-G`,
 `--no-group`) and skips ambiguous layouts, names with spaces, author/context
 columns, or unknown timestamps. BSD `-G` with both ownership columns retains
-both fields. Timestamp styling is uniform through `da`, without parsing ages
-or fetching modification times.
+both fields. An explicit `da` style (including an empty value or reset) keeps
+uniform timestamp styling and takes precedence over the age fade.
+
+### Timestamp age shading
+
+The default fade uses 32 shades derived from your theme's foreground and
+`dired-eza-timestamp` face. Newest dates are brighter and more prominent on dark
+backgrounds; on light backgrounds they have stronger foreground contrast.
+Hours, days, and weeks gradually fade along a logarithmic scale. At 90 days and
+older, dark mode reaches a shade forty-five percent darker than the timestamp
+face's gray. Light mode instead fades from the darkest foreground toward a
+lighter gray, capped at `#999999` so old entries do not disappear into white.
+
+```emacs-lisp
+(setq dired-eza-timestamp-fade-days 90)   ; age reaching the oldest shade
+(setq dired-eza-timestamp-age-colors nil) ; optional: restore uniform gray
+```
+
+Run `M-x dired-eza-refresh` after changing these options. Theme switches and
+direct background/foreground changes automatically rebuild timestamp shades.
+Time and palette are snapshotted at enable, refresh, and ordinary listing reads;
+repeated date strings share cached faces. There is no timer, filesystem lookup,
+or remote query. An idle buffer retains its shades until refreshed.
+
+Only the displayed timestamp is parsed. Supported forms include ISO dates,
+full ISO timestamps with offsets, and English BSD/GNU/ls-lisp month dates.
+Yearless clock dates infer the current year, using the previous year when the
+candidate would be more than one hour in the future; explicit future dates
+use the newest shade. Dates without a timezone use Emacs's local timezone.
+Rounded dates have only their displayed precision. Invalid dates, unknown
+month names, unsupported layouts, and displays without usable theme colors
+retain neutral timestamp coloring. TRAMP uses these same listing-only rules
+without querying remote metadata or timezone.
 
 ## Native Dired behavior
 

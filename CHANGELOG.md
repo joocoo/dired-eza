@@ -4,6 +4,21 @@
 
 ### Added
 
+- Matching `dired-eza-dark-ls-colors` override, nil by default, with the same
+  replacement, fallback, and automatic switching behavior as the light option.
+
+- Optional `dired-eza-light-ls-colors` filename palette, defaulting to nil for
+  ordinary inheritance. Light-only replacement strings and empty-string theme
+  fallback switch automatically on background changes, independently of
+  timestamp coloring. Dark-mode filename colors retain their existing rules.
+
+- Default age-based timestamp shading: newer entries have stronger foreground
+  contrast, fading to a gray slightly darker than the previous timestamp face.
+  Added configurable fade age, opt-out, cached theme/time snapshots, visible
+  date parsing with year rollover and offsets, and neutral fallback. Explicit
+  `da` styles and resets retain precedence. No filesystem or remote queries.
+- Timestamp parsing, palette, fade, override, cache, and lifecycle tests.
+
 - Opt-in `dired-eza-du-mode` for cached recursive local disk usage, using a
   persistent cache and one deduplicated asynchronous worker. Fresh entries
   avoid scans; stale entries remain visible during refresh. Added TTL and
@@ -33,6 +48,14 @@
 - Contributor instructions, design notes, and a feature roadmap.
 
 ### Fixed
+
+- Give light-mode timestamps a distinct range: newest is darkest, fading to
+  a lighter gray instead of compressing all ages toward black. Dark-mode
+  timestamp shading retains its muted darker endpoint.
+
+- Rebuild timestamp shades automatically when themes or frame colors change,
+  preventing cached dark-mode whites from remaining on a light background.
+  Made the oldest gray forty-five percent darker than the original timestamp gray.
 
 - Mark development tests as source-only so package-vc installation does not
   try to compile test modules without their development load path.

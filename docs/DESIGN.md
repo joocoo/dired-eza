@@ -112,7 +112,8 @@ Remote identity is not inferred from local accounts. Local root aliases come
 from ID zero; native Windows does not use Unix root semantics. Owner fields
 must match the expected column count after link count and before size; skip
 author/context columns and ambiguous names with spaces. Dates reuse the size
-module's timestamp grammar and are rendered uniformly, without age queries.
+module's timestamp grammar. Explicit `da` styles render uniformly; the default
+age shading parses the displayed date without filesystem age queries.
 Both owner and timestamp colors can be disabled independently.
 
 ## Test organization and local commands
@@ -158,3 +159,50 @@ hooks clear/rebuild overlays on reread and remove them during WDired; a local
 post-command hook restores them after WDired returns, without global advice.
 This feature is tested on macOS / Emacs 31.1; live TRAMP and Windows remain
 unverified, with synthetic tests guarding the remote exclusion.
+
+## Timestamp age shading
+
+`dired-eza-timestamp-time` parses visible ISO and English month dates through
+Emacs's `parse-time-string` and validates the encoded calendar fields to reject
+normalization of invalid dates. Explicit numeric offsets are respected; missing
+offsets use the local timezone. For yearless clock dates, a candidate more than
+one hour ahead moves to the previous year, accommodating New Year rollover.
+Unsupported month names and ambiguous dates return the existing neutral face.
+Future explicit dates clamp to the newest shade.
+
+The palette contains 32 foreground colors interpolated between a blend of the
+default foreground (85%) and timestamp gray (15%), and a shade forty-five percent
+darker than that gray in dark mode. Light mode instead lightens the shadow
+endpoint fifteen percent toward white, capping channels at 0.6 (#999999),
+so newer timestamps are darkest and older timestamps remain readable. Age position is logarithmic in hours, saturating at
+`dired-eza-timestamp-fade-days` (default 90). Color computation and reference
+time are snapshotted per refresh/listing read; repeated date strings share a
+buffer-local face cache. No timer, stat, or process is introduced, including
+for TRAMP. Explicit `da` styles and resets bypass age shading. Option changes require `dired-eza-refresh`; an idle listing does not age
+automatically. Theme enable/disable hooks refresh all enabled buffers; a
+buffer-local command hook also detects direct foreground/background changes.
+Both paths reselect the configured filename palette as well, even when timestamp
+coloring is disabled, without re-querying identity or rereading listings.
+An unchanged color context preserves the existing palette and face cache.
+Disable removes the local listing hook and all timestamp snapshot/cache state.
+
+Tests cover date formats, offset handling, invalid/leap dates, New Year rollover,
+future dates, monotonic fade, saturation, explicit overrides, fallback, face
+caching, reversible font-lock integration, light/dark contrast, and palette/cache
+rebuilding on dark/light/dark theme refresh and automatic theme/background
+changes without manual refresh. Local validation uses macOS /
+Emacs 31.1; graphical appearance and live TRAMP remain manual checks.
+
+## Light and dark filename palettes
+
+`dired-eza-light-ls-colors` is nil by default. When supplied, its string replaces
+the ordinary filename palette only for a frame with a light background. An
+empty string means theme fallbacks. Dark frames use the independent `dired-eza-dark-ls-colors` override, also nil
+by default, falling back to `dired-eza-ls-colors` or local LS_COLORS inheritance.
+Both options accept empty strings for native/theme fallback; neither affects
+the other background. This keeps explicit colors opt-in and avoids
+silently modifying RGB rules or assuming the terminal's palette. Metadata
+namespaces are independent. The existing theme/context hooks reparse filename
+rules on background changes; they now operate even with timestamps disabled.
+Tests cover nil inheritance, custom base values, empty-string fallback,
+light/dark switching, text preservation and unchanged dark palettes.

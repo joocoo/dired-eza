@@ -137,5 +137,193 @@
         (font-lock-ensure)
         (should (memq 'dired-eza-owner-self (ensure-list (dired-eza-test--face "owner"))))))))
 
+(ert-deftest dired-eza-timestamp-parses-listing-formats-and-year-rollover ()
+  (let* ((tz (getenv "TZ"))
+         (process-environment (copy-sequence process-environment))
+         (now (encode-time 0 0 12 1 1 2026 t)))
+    (unwind-protect
+        (progn
+          (setenv "TZ" "UTC0")
+          (dolist (text '("2025-10-15 12:34" "Oct 15 12:34"
+                          "15 Oct 12:34" "15. Oct 12:34"))
+            (should (time-equal-p (dired-eza-timestamp-time text now)
+                                  (encode-time 0 34 12 15 10 2025 t))))
+          (dolist (text '("2025-10-15" "Oct 15  2025" "15. Oct 2025" "Oct 15, 2025"))
+            (should (time-equal-p (dired-eza-timestamp-time text now)
+                                  (encode-time 0 0 0 15 10 2025 t))))
+          (should (time-equal-p (dired-eza-timestamp-time "2025-10-15 12:34:56.123 -0500" now)
+                                (encode-time 56 34 17 15 10 2025 t)))
+          (should (time-equal-p (dired-eza-timestamp-time "Dec 31 23:59" now)
+                                (encode-time 0 59 23 31 12 2025 t)))
+          (should (time-equal-p (dired-eza-timestamp-time "Jan 1 12:30" now)
+                                (encode-time 0 30 12 1 1 2026 t))))
+      (setenv "TZ" tz))))
+
+(ert-deftest dired-eza-timestamp-ambiguous-and-invalid-dates-stay-neutral ()
+  (let ((now (encode-time 0 0 12 15 10 2026 t)))
+    (dolist (text '("not a date" "2026-02-30" "2025-02-29" "2026-13-01"
+                    "2026-10-15 25:00" "2026-10-15 12:99" "15. Okt 2025"))
+      (should-not (dired-eza-timestamp-time text now))
+      (should (eq (dired-eza-timestamp-age-face text now [(:foreground "#ffffff")])
+                  'dired-eza-timestamp)))))
+
+(defun dired-eza-test--timestamp-palette ()
+  (dired-eza-timestamp-palette
+   (make-list 3 (/ 224.0 255)) (make-list 3 (/ 128.0 255))))
+
+(defun dired-eza-test--timestamp-brightness (face)
+  ;; Read generated RGB directly; terminal `color-values' quantizes shades.
+  (/ (string-to-number (substring (plist-get face :foreground) 1 3) 16) 255.0))
+
+(ert-deftest dired-eza-timestamp-palette-gradually-darkens ()
+  (let* ((palette (dired-eza-test--timestamp-palette))
+         (values (mapcar #'dired-eza-test--timestamp-brightness palette)))
+    (should (= (length palette) 32))
+    (should (> (car values) (/ 128.0 255)))
+    (should (< (car (last values)) (/ 128.0 255)))
+    (should (> (car (last values)) (* 0.50 (/ 128.0 255))))
+    (cl-loop for (a b) on values while b do (should (> a b)))
+    (cl-letf (((symbol-function 'face-foreground) (lambda (&rest _) "unspecified-fg")))
+      (should-not (dired-eza-timestamp-palette)))))
+
+(ert-deftest dired-eza-timestamp-age-fade-newest-future-and-oldest ()
+  (let* ((palette (dired-eza-test--timestamp-palette))
+         (now (encode-time 0 0 12 15 10 2026 t))
+         (dired-eza-timestamp-fade-days 90)
+         (faces
+          (mapcar (lambda (days)
+                    (dired-eza-timestamp-age-face
+                     (format-time-string "%Y-%m-%d %H:%M:%S +0000"
+                                         (time-subtract now (seconds-to-time (* days 86400))) t)
+                     now palette))
+                  '(0 1 7 30 90 365)))
+         (brightness (mapcar (lambda (face) (dired-eza-test--timestamp-brightness (car face))) faces)))
+    (should (equal (caar faces) (aref palette 0)))
+    (should (equal (car (nth 4 faces)) (aref palette 31)))
+    (should (equal (nth 4 faces) (nth 5 faces)))
+    (cl-loop for (a b) on brightness while b do (should (>= a b)))
+    (should (equal (dired-eza-timestamp-age-face "2027-10-15 12:00 +0000" now palette)
+                   (car faces)))
+    (let ((dired-eza-timestamp-age-colors nil))
+      (should (eq (dired-eza-timestamp-age-face "2026-10-15 12:00" now palette)
+                  'dired-eza-timestamp)))))
+
+(ert-deftest dired-eza-timestamp-explicit-style-and-reset-override-age ()
+  (let ((now (current-time)) (palette (dired-eza-test--timestamp-palette)))
+    (dolist (text '("da=31" "da=0" "da=" "reset"))
+      (let ((rules (dired-eza-metadata-parse text)))
+        (should (equal (dired-eza-metadata-face rules nil 'date "2026-10-15 12:00" now palette)
+                       (list (cdr (assoc "da" rules)) 'dired-eza-timestamp)))))))
+
+(ert-deftest dired-eza-timestamp-font-lock-caches-by-date-and-cleans-up ()
+  (dired-eza-test--buffer
+    (dired-eza-test--size-row "recent" "12" "2026-10-15 12:00")
+    (dired-eza-test--size-row "older" "12" "2025-10-15 12:00")
+    (let ((palette (dired-eza-test--timestamp-palette))
+          (now (encode-time 0 0 12 15 10 2026)))
+      (cl-letf (((symbol-function 'dired-eza-timestamp-palette) (lambda () palette)))
+        (dired-eza-mode 1)
+        (setq dired-eza--timestamp-now now)
+        (font-lock-ensure)
+        (should (equal (car (dired-eza-test--face "2026-10-15 12:00")) (aref palette 0)))
+        (should (equal (car (dired-eza-test--face "2025-10-15 12:00")) (aref palette 31)))
+        (should (= (hash-table-count dired-eza--timestamp-cache) 3))
+        (let ((cache dired-eza--timestamp-cache))
+          (dired-eza-refresh)
+          (should-not (eq cache dired-eza--timestamp-cache))
+          (should (= (hash-table-count dired-eza--timestamp-cache) 0)))
+        (dired-eza-mode -1)
+        (font-lock-ensure)
+        (should-not dired-eza--timestamp-cache)
+        (should-not (memq #'dired-eza--timestamp-reset dired-after-readin-hook))
+        (should-not (dired-eza-test--face "2026-10-15 12:00"))))))
+
+(ert-deftest dired-eza-timestamp-light-and-dark-palettes-fade-in-contrast ()
+  (dolist (theme '((0.88 0.50 0.08) (0.12 0.55 1.0)))
+    (let* ((foreground (nth 0 theme)) (shadow (nth 1 theme))
+           (background (nth 2 theme))
+           (palette (dired-eza-timestamp-palette
+                     (make-list 3 foreground) (make-list 3 shadow)))
+           (shades (mapcar #'dired-eza-test--timestamp-brightness palette))
+           (contrasts (mapcar (lambda (shade) (abs (- shade background))) shades)))
+      ;; Strongest text contrast for new files on either background.
+      (should (> (car contrasts) (car (last contrasts))))
+      (cl-loop for (newer older) on contrasts while older
+               do (should (>= newer older)))
+      ;; The oldest gray is distinctly darker, matching muted dotfile text.
+      (should (< (abs (- (car (last shades))
+                         (if (< foreground shadow) (min 0.6 (+ (* shadow 0.85) 0.15))
+                           (* shadow 0.55))))
+                 (/ 1.0 255)))
+      (if (< foreground shadow)
+          (should (< (car shades) (car (last shades))))
+        (should (> (car shades) (car (last shades)))))
+      (should (> (car (last contrasts)) 0.15)))))
+
+(ert-deftest dired-eza-timestamp-theme-refresh-rebuilds-palette-and-face-cache ()
+  (dired-eza-test--buffer
+    (let ((foreground 0.88) (shadow 0.50))
+      (cl-letf (((symbol-function 'dired-eza-timestamp-palette)
+                 (let ((build (symbol-function 'dired-eza-timestamp-palette)))
+                   (lambda () (funcall build (make-list 3 foreground)
+                                       (make-list 3 shadow))))))
+        (dired-eza-mode 1)
+        (font-lock-ensure)
+        (let ((dark-palette dired-eza--timestamp-palette)
+              (dark-cache dired-eza--timestamp-cache))
+          (setq foreground 0.12 shadow 0.55)
+          (dired-eza-refresh)
+          (font-lock-ensure)
+          (should-not (equal dark-palette dired-eza--timestamp-palette))
+          (should-not (eq dark-cache dired-eza--timestamp-cache))
+          (should (< (dired-eza-test--timestamp-brightness
+                      (aref dired-eza--timestamp-palette 0))
+                     (dired-eza-test--timestamp-brightness
+                      (aref dired-eza--timestamp-palette 31))))
+          (setq foreground 0.88 shadow 0.50)
+          (dired-eza-refresh)
+          (should (equal dark-palette dired-eza--timestamp-palette)))))))
+
+(ert-deftest dired-eza-timestamp-theme-switch-updates-without-manual-refresh ()
+  (dired-eza-test--buffer
+    (let* ((context 'dark)
+           (build-palette (symbol-function 'dired-eza-timestamp-palette)))
+      (cl-letf (((symbol-function 'dired-eza--timestamp-theme-context)
+                 (lambda () context))
+                ((symbol-function 'dired-eza-timestamp-palette)
+                 (lambda () (funcall build-palette
+                                     (make-list 3 (if (eq context 'dark) 0.88 0.12))
+                                     (make-list 3 0.5)))))
+        (dired-eza-mode 1)
+        (font-lock-ensure)
+        (let ((dark-palette dired-eza--timestamp-palette)
+              (dark-cache dired-eza--timestamp-cache)
+              (listing (buffer-string)))
+          (should (memq #'dired-eza--timestamp-check-theme post-command-hook))
+          ;; No palette/cache churn on ordinary commands without color changes.
+          (dired-eza--timestamp-check-theme)
+          (should (eq dark-cache dired-eza--timestamp-cache))
+          (setq context 'light)
+          ;; Theme changes elsewhere must update this existing Dired buffer.
+          (with-temp-buffer
+            (run-hook-with-args 'enable-theme-functions 'test-light))
+          (should-not (eq dark-cache dired-eza--timestamp-cache))
+          (should-not (equal dark-palette dired-eza--timestamp-palette))
+          (should (< (dired-eza-test--timestamp-brightness
+                      (aref dired-eza--timestamp-palette 0)) 0.25))
+          (font-lock-ensure)
+          (should (equal listing (buffer-string)))
+          (should-not (buffer-modified-p))
+          (setq context 'dark)
+          (run-hook-with-args 'disable-theme-functions 'test-light)
+          (should (equal dark-palette dired-eza--timestamp-palette))
+          ;; Direct frame/background changes are detected by the local hook too.
+          (setq context 'light)
+          (dired-eza--timestamp-check-theme)
+          (should-not (equal dark-palette dired-eza--timestamp-palette))
+          (dired-eza-mode -1)
+          (should-not dired-eza--timestamp-theme-key)
+          (should-not (memq #'dired-eza--timestamp-check-theme post-command-hook)))))))
+
 (provide 'dired-eza-metadata-test)
 ;;; dired-eza-metadata-test.el ends here

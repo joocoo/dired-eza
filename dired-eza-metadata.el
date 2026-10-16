@@ -10,6 +10,8 @@
 ;;; Code:
 (require 'dired)
 (require 'dired-eza-size)
+(require 'parse-time)
+(require 'color)
 
 (defcustom dired-eza-color-ownership t
   "Whether to color displayed user and group columns.
@@ -19,6 +21,17 @@ Run `dired-eza-refresh' after changing this option."
   "Whether to color displayed timestamps.
 Run `dired-eza-refresh' after changing this option."
   :type 'boolean :group 'dired-eza)
+(defcustom dired-eza-timestamp-age-colors t
+  "Whether newer timestamps are brighter and older ones more muted.
+Explicit EZA_COLORS `da' styles, including resets, take precedence.
+Run `dired-eza-refresh' after changing this option."
+  :type 'boolean :group 'dired-eza)
+(defcustom dired-eza-timestamp-fade-days 90
+  "Age in days at which timestamps reach their oldest, most muted shade.
+The fade is logarithmic so hours, days and weeks remain distinguishable.
+Values below one are treated as one.  Refresh to apply changes."
+  :type 'natnum :group 'dired-eza)
+
 (defcustom dired-eza-user-identities nil
   "Names and numeric ID strings to recognize as the current user.
 Nil detects local identity once per refresh.  In remote buffers nil leaves
@@ -69,8 +82,85 @@ Only the primary local group is auto-detected.  No subprocesses are used."
   (cl-some (lambda (id) (if ignore-case (eq t (compare-strings value nil nil id nil nil t))
                          (equal value id))) identities))
 
-(defun dired-eza-metadata-face (rules identity kind value)
-  "Choose a face from RULES for displayed KIND and VALUE using IDENTITY."
+(defun dired-eza-timestamp-palette (&optional foreground shadow)
+  "Return 32 theme-derived timestamp shades, or nil without usable colors.
+Recent dates approach the default foreground.  Dark themes fade to a shade
+forty-five percent darker than shadow; light themes fade to a lighter gray.
+Optional FOREGROUND and SHADOW are normalized RGB triplets; otherwise
+resolve the theme colors.  Foreground darker than shadow selects light mode.
+No file data is read."
+  (condition-case nil
+      (let ((foreground (or foreground (color-name-to-rgb (face-foreground 'default nil t))))
+            (shadow (or shadow (color-name-to-rgb (face-foreground 'dired-eza-timestamp nil t)))))
+        (when (and foreground shadow)
+          (let ((bright (cl-mapcar (lambda (fg gray) (+ (* 0.85 fg) (* 0.15 gray)))
+                                  foreground shadow))
+                (old (if (< (apply #'+ foreground) (apply #'+ shadow))
+                         ;; Light mode: keep old dates readable while giving
+                         ;; them less contrast than the newest, darkest dates.
+                         (mapcar (lambda (channel) (min 0.6 (+ (* 0.85 channel) 0.15))) shadow)
+                       (mapcar (lambda (channel) (* 0.55 channel)) shadow))))
+            (vconcat
+             (cl-loop for index from 0 below 32
+                      for fraction = (/ index 31.0)
+                      collect
+                      (list :foreground
+                            (apply #'color-rgb-to-hex
+                                   (append
+                                    (cl-mapcar (lambda (a b)
+                                                 (+ (* (- 1 fraction) a) (* fraction b)))
+                                               bright old)
+                                    '(2)))))))))
+    (error nil)))
+
+(defun dired-eza-timestamp-time (text now)
+  "Parse listing timestamp TEXT relative to NOW, or return nil.
+Use only displayed fields.  Yearless clock dates use the local current
+year, or the previous year when that would exceed NOW by over one hour.
+Unknown month names and invalid calendar dates keep neutral coloring."
+  (condition-case nil
+      (let* ((parts (parse-time-string text))
+             (second (or (nth 0 parts) 0))
+             (minute (or (nth 1 parts) 0))
+             (hour (or (nth 2 parts) 0))
+             (day (nth 3 parts)) (month (nth 4 parts))
+             (explicit-year (nth 5 parts))
+             (year (or explicit-year (nth 5 (decode-time now))))
+             (zone (nth 8 parts)))
+        (when (and day month (<= 1 month 12) (<= 1 day 31)
+                   (<= 0 hour 23) (<= 0 minute 59) (<= 0 second 59))
+          (let* ((time (encode-time second minute hour day month year zone))
+                 (decoded (decode-time time zone)))
+            ;; `encode-time' normalizes dates like February 30; reject them.
+            (when (equal (list second minute hour day month year)
+                         (cl-subseq decoded 0 6))
+              (if (and (null explicit-year)
+                       (> (float-time (time-subtract time now)) 3600))
+                  (let* ((previous (encode-time second minute hour day month (1- year) zone))
+                         (previous-date (decode-time previous zone)))
+                    (when (equal (list day month (1- year)) (cl-subseq previous-date 3 6))
+                      previous))
+                time)))))
+    (error nil)))
+
+(defun dired-eza-timestamp-age-face (text now palette)
+  "Choose a shade for displayed TEXT using refresh time NOW and PALETTE.
+Future timestamps use the newest shade.  Missing or ambiguous data falls
+back to `dired-eza-timestamp'."
+  (if-let* ((time (and dired-eza-timestamp-age-colors now palette
+                      (dired-eza-timestamp-time text now))))
+      (let* ((age (max 0 (float-time (time-subtract now time))))
+             (limit (* 86400.0 (max 1 dired-eza-timestamp-fade-days)))
+             (fraction (min 1.0 (/ (log (1+ (/ age 3600.0)))
+                                   (log (1+ (/ limit 3600.0))))))
+             (index (min (1- (length palette))
+                         (floor (* fraction (1- (length palette)))))))
+        (list (aref palette index) 'dired-eza-timestamp))
+    'dired-eza-timestamp))
+
+(defun dired-eza-metadata-face (rules identity kind value &optional now palette)
+  "Choose a face from RULES for displayed KIND and VALUE using IDENTITY.
+Optional NOW and PALETTE are the cached timestamp shading context."
   (let* ((group (eq kind 'group))
          (known (plist-get identity (if group :groups :users)))
          (root (plist-get identity (if group :root-groups :root-users)))
@@ -86,7 +176,9 @@ Only the primary local group is auto-detected.  No subprocesses are used."
                          (is-root (if group 'dired-eza-group-root 'dired-eza-owner-root))
                          (group 'dired-eza-group-other) (t 'dired-eza-owner-other)))
          (style (cdr (assoc key rules))))
-    (if style (list style fallback) fallback)))
+    (cond (style (list style fallback))
+          ((eq kind 'date) (dired-eza-timestamp-age-face value now palette))
+          (t fallback))))
 
 (defun dired-eza-metadata-fields (start filename switches)
   "Return (START END KIND TEXT) fields between START and FILENAME.
